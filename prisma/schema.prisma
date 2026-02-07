@@ -1,0 +1,210 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// NextAuth Models
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  
+  // App Specific
+  stores        Store[]
+  role          String    @default("USER") // USER, ADMIN
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Application Models
+
+model Store {
+  id          String   @id @default(cuid())
+  shop        String   @unique // myshopify.com domain
+  accessToken String?  @db.Text
+  scope       String?
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  isActive    Boolean  @default(true)
+  plan        String   @default("FREE") // FREE, PRO
+  
+  // Relations
+  events      Event[]
+  products    Product[]
+  catalogs    CatalogSet[]
+  segments    AudienceSegment[]
+  creatives   Creative[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  
+  type        String   // page_view, add_to_cart, checkout, purchase
+  timestamp   DateTime @default(now())
+  
+  sessionId   String?  // cookie-based session ID (distinct from user session)
+  url         String?
+  referrer    String?
+  
+  // Commerce Data
+  revenue     Float?
+  currency    String?  @default("USD")
+  orderId     String?
+  cartToken   String?
+  
+  // Attribution Data
+  source      String?  // utm_source
+  medium      String?  // utm_medium
+  campaign    String?  // utm_campaign
+  content     String?  // utm_content
+  term        String?  // utm_term
+  gclid       String?
+  fbclid      String?
+  
+  properties  Json?    // Detailed event properties (product_id, variant_id etc)
+  
+  createdAt   DateTime @default(now())
+
+  @@index([storeId, type])
+  @@index([timestamp])
+  @@index([sessionId])
+}
+
+model Product {
+  id          String   @id // Shopify Global ID (gid://shopify/Product/123)
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  
+  title       String
+  handle      String
+  image       String?
+  price       Float?
+  currency    String?
+  
+  // Metrics Cache (optional for fast querying)
+  views       Int      @default(0)
+  sales       Int      @default(0)
+  revenue     Float    @default(0)
+
+  catalogs    CatalogSet[] @relation("ProductToCatalog")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([storeId])
+}
+
+model CatalogSet {
+  id          String   @id @default(cuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  
+  name        String
+  description String?
+  type        String   @default("MANUAL") // MANUAL, SMART
+  rules       Json?    // Rules for smart generation
+  
+  products    Product[] @relation("ProductToCatalog")
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([storeId])
+}
+
+model AudienceSegment {
+  id          String   @id @default(cuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  
+  name        String
+  description String?
+  rules       Json     // Logic tree for segmentation
+  
+  customerIds String[] // Matched Shopify Customer IDs (stored as list of strings, simpler for MVP)
+  count       Int      @default(0)
+  
+  lastCalculatedAt DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([storeId])
+}
+
+model Creative {
+  id          String   @id @default(cuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  
+  hash        String   // MD5 of content URL or content itself
+  type        String   // IMAGE, VIDEO
+  url         String
+  thumbnail   String?
+  
+  metrics     Json?    // CTR, CVR, Impressions cached
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([storeId, hash])
+  @@index([storeId])
+}
