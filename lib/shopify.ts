@@ -1,13 +1,14 @@
-import "@shopify/shopify-api/adapters/node";
-import { Shopify, ApiVersion } from "@shopify/shopify-api";
+import '@shopify/shopify-api/adapters/node';
+import { shopifyApi, LATEST_API_VERSION } from '@shopify/shopify-api';
 
-Shopify.Context.initialize({
-    API_KEY: process.env.SHOPIFY_API_KEY!,
-    API_SECRET_KEY: process.env.SHOPIFY_API_SECRET!,
-    SCOPES: ["read_products"],
-    HOST_NAME: process.env.SHOPIFY_HOST!.replace(/^https?:\/\//, ""),
-    API_VERSION: ApiVersion.January24,
-    IS_EMBEDDED_APP: false,
+// Initialize the Shopify library
+const shopify = shopifyApi({
+    apiKey: process.env.SHOPIFY_API_KEY,
+    apiSecretKey: process.env.SHOPIFY_API_SECRET,
+    scopes: process.env.SHOPIFY_SCOPES ? process.env.SHOPIFY_SCOPES.split(',') : ['read_products'],
+    hostName: process.env.SHOPIFY_HOST ? process.env.SHOPIFY_HOST.replace(/^https?:\/\//, '') : 'localhost',
+    apiVersion: LATEST_API_VERSION,
+    isEmbeddedApp: false,
 });
 
-export const shopify = Shopify;
+export default shopify;
